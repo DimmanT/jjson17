@@ -41,11 +41,8 @@ namespace jjson17
     std::ostream& operator<<(std::ostream& s, const Record& r);
     // ------------------------------
 
+    std::string to_string(const Record& r); ///< \brief формирует строку вида ""tag" : value". Строка в кодировке UTF-8.
 
 }//end of NS jjson17
-
-namespace std {
-string to_string(const jjson17::Record& r); ///< \brief формирует строку вида ""tag" : value". Строка в кодировке UTF-8.
-}
 
 #endif //JJSON_17_HEADER

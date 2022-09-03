@@ -183,17 +183,16 @@ std::ostream& operator<<(std::ostream& s, const Record& r)
 //...........................................
 //-------------------------------------------
 
-
-} // end of ns jjson17
-
 /**
  * \return строку вида "tag : value"
  */
-std::string std::to_string(const jjson17::Record &r)
+std::string to_string(const Record &r)
 {
-    using namespace::jjson17;
     std::stringstream ss;
     ss<<std::setprecision(EXT_PRECISION);
     writeValue(ss,0,r.first,r.second,SkipTag::NO);
     return ss.str();
 }
+
+} // end of ns jjson17
+

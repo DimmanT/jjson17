@@ -112,11 +112,15 @@ void writeValue(std::ostream& s,int depth, const std::string& tag,const Value_t&
     case Type::INTEGER  :   s <<get<int64_t>(val);break;
     case Type::REAL     :   s <<get<double>(val);break;
     case Type::ARRAY    :   {
-                            INSERT_TABS;
-                            s << '[' <<endl;
+                            if(skipTag == SkipTag::NO) {
+                                s << std::endl;
+                                INSERT_TABS;
+                            }
+                            s << '[' ;
                             const auto& arr = get<Array>(val);
                             if(!arr.empty())
                             {
+                                s<<endl;
                                 depth++;
                                 for(size_t i = 0; i < arr.size()-1;++i)
                                 {
@@ -128,13 +132,16 @@ void writeValue(std::ostream& s,int depth, const std::string& tag,const Value_t&
                                 writeValue(s,depth,"",arr.back(),SkipTag::YES); // |>  то же, но без ','
                                 s<<endl;                                        // |
                                 depth--;
+                                INSERT_TABS;
                             }
-                            INSERT_TABS;
                             s << ']';
                             break;
                             }
     case Type::OBJECT   :   {
-                            INSERT_TABS;
+                            if(skipTag == SkipTag::NO) {
+                                s << std::endl;
+                                INSERT_TABS;
+                            }
                             s<<'{'<<endl;
                             const auto& obj = get<Object>(val);
                             if(!obj.empty())
@@ -148,9 +155,9 @@ void writeValue(std::ostream& s,int depth, const std::string& tag,const Value_t&
                                     if(k!=last->first) s<<',';
                                     s<<endl;
                                 }
+                                depth--;
+                                INSERT_TABS;
                             }
-                            depth--;
-                            INSERT_TABS;
                             s<<'}';
                             break;
                             }

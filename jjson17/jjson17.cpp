@@ -7,7 +7,7 @@ namespace jjson17 {
 
 
 //---------- блок Value ---------------
-inline constexpr Type type_of(const Value_t& value)
+static constexpr Type type_of(const Value_t& value)
 {
     return static_cast<Type>(value.index());    //следует следить за порядком типов в объявлении варианта
 }
@@ -43,14 +43,14 @@ bool Value::isNull()
 //----------- блок Вывода --------------
 enum class SkipTag : bool {NO,YES};
 
-void writeValue(std::ostream& s,int depth, const std::string& tag,const Value_t& val, SkipTag skipTag);
+static void writeValue(std::ostream& s,uint16_t depth, const std::string& tag,const Value_t& val, SkipTag skipTag);
 
 /**
  * @brief escape
  * @param str
  * @return строку в UTF-8 с экранированными символами согласно рекомендации \link json.org
  */
-std::string escape(std::string&& str)
+static std::string escape(std::string&& str)
 {
     //предполагается, что строка utf8
     //таблица размера символа utf8 в байтах по префиксу первого байта
@@ -76,7 +76,6 @@ std::string escape(std::string&& str)
                 case '\n' : str[i] = 'n';   str.insert(i,1,'\\'); i++; break;
                 case '\r' : str[i] = 'r';   str.insert(i,1,'\\'); i++; break;
                 case '\t' : str[i] = 't';   str.insert(i,1,'\\'); i++; break;
-                // '"' будут обработаны отдельно функцией quoted()
                 default   : break;
             }
         }
@@ -85,10 +84,78 @@ std::string escape(std::string&& str)
 
     return std::move(str);
 }
-inline auto prepareStr(std::string str)
+static auto prepareStr(std::string str)
 {
     return '"'+escape(std::move(str))+'"';
 }
+
+struct Visitor {
+    Visitor(std::ostream& stream, uint16_t depth, bool skipTag) : s(stream),depth(depth),skipTag(skipTag) {}
+    void operator()(nullptr_t             ) {s << "null";}
+    void operator()(bool               val) {s << val;}
+    void operator()(const std::string& str) {s << prepareStr(str);}
+    void operator()(int64_t            num) {s << num;}
+    void operator()(double             num) {s << num;}
+    void operator()(const Array&       arr)
+    {
+        using namespace std;
+        if(!skipTag) {
+            s << std::endl;
+            insertTabs();
+        }
+        s << '[' ;
+        if(!arr.empty())
+        {
+            s<<endl;
+            depth++;
+            for(size_t i = 0; i < arr.size()-1; ++i)
+            {
+                insertTabs();
+                writeValue(s,depth,"",arr[i],SkipTag::YES);
+                s<<','<<endl;
+            }
+            insertTabs();                                    // |
+            writeValue(s,depth,"",arr.back(),SkipTag::YES);  // |>  то же, но без ','
+            s<<endl;                                         // |
+            depth--;
+            insertTabs();
+        }
+        s << ']';
+    }
+    void operator()(const Object&      obj)
+    {
+        using namespace std;
+        if(!skipTag)  {
+            s << std::endl;
+            insertTabs();
+        }
+        s<<'{';
+        if(!obj.empty())
+        {
+            s << endl;
+            depth++;
+            auto last = obj.end();last--;
+            for(const auto& [k,v] : obj)
+            {
+                insertTabs();
+                writeValue(s,depth,k,v,SkipTag::NO);
+                if(k!=last->first) s<<',';
+                s<<endl;
+            }
+            depth--;
+            insertTabs();
+        }
+        s<<'}';
+    }
+private:
+    std::ostream& s;
+    uint16_t      depth;
+    bool          skipTag;
+
+    inline void insertTabs()  {
+        for(int t = 0; t < depth; ++t)  s<<'\t';
+    }
+};
 
 /**
  * @brief writeValue рекурсивная функция, заполняющая поток \c s значением \c val и вызываемая для каждого подзначения, хранимого в \c val.
@@ -98,95 +165,52 @@ inline auto prepareStr(std::string str)
  * @param v         само значение
  * @param skipTag   если выставлен в \c SkipTag::YES , то в поток будет записано только значение без, наименования и символа ':'
  */
-void writeValue(std::ostream& s,int depth, const std::string& tag,const Value_t& val, SkipTag skipTag)
+static void writeValue(std::ostream& s,uint16_t depth, const std::string& tag,const Value_t& val, SkipTag skipTag)
 {
-  #define INSERT_TABS  for(int t = 0; t < depth; ++t)  s<<'\t'
-
-    using namespace std;
     if(skipTag == SkipTag::NO)
         s << prepareStr(tag)<<':'<<'\t';
-    switch (type_of(val)) {
-    case Type::NUL      :   s <<"null";break;   //non-quoted
-    case Type::BOOL     :   s <<std::boolalpha<<get<bool>(val)<<std::noboolalpha;break;
-    case Type::STRING   :   s <<prepareStr(get<string>(val));break;
-    case Type::INTEGER  :   s <<get<int64_t>(val);break;
-    case Type::REAL     :   s <<get<double>(val);break;
-    case Type::ARRAY    :   {
-                            if(skipTag == SkipTag::NO) {
-                                s << std::endl;
-                                INSERT_TABS;
-                            }
-                            s << '[' ;
-                            const auto& arr = get<Array>(val);
-                            if(!arr.empty())
-                            {
-                                s<<endl;
-                                depth++;
-                                for(size_t i = 0; i < arr.size()-1;++i)
-                                {
-                                    INSERT_TABS;
-                                    writeValue(s,depth,"",arr[i],SkipTag::YES);
-                                    s<<','<<endl;
-                                }
-                                INSERT_TABS;                                    // |
-                                writeValue(s,depth,"",arr.back(),SkipTag::YES); // |>  то же, но без ','
-                                s<<endl;                                        // |
-                                depth--;
-                                INSERT_TABS;
-                            }
-                            s << ']';
-                            break;
-                            }
-    case Type::OBJECT   :   {
-                            if(skipTag == SkipTag::NO) {
-                                s << std::endl;
-                                INSERT_TABS;
-                            }
-                            s<<'{'<<endl;
-                            const auto& obj = get<Object>(val);
-                            if(!obj.empty())
-                            {
-                                depth++;
-                                auto last = obj.end();last--;
-                                for(const auto& [k,v] : obj)
-                                {
-                                    INSERT_TABS;
-                                    writeValue(s,depth,k,v,SkipTag::NO);
-                                    if(k!=last->first) s<<',';
-                                    s<<endl;
-                                }
-                                depth--;
-                                INSERT_TABS;
-                            }
-                            s<<'}';
-                            break;
-                            }
-    }
-#undef INSERT_TABS
+    std::visit(Visitor{s, depth, skipTag==SkipTag::YES},val);
 }
 
 //...... блок операторов вывода ..............
-static const int EXT_PRECISION = 12;    //увеличим точность вывода double до EXT_PRECISION знаков. Установите другое значение по необходимости.
+/// \todo передать обязанность выставления точности на пользователя (!)
 
-std::ostream& operator<<(std::ostream& s, const Object& o)
-{
-    s <<std::setprecision(EXT_PRECISION);
-    writeValue(s,0,"",o,SkipTag::YES);
-    return s;
+std::ostream& operator<<(std::ostream& s, const Object& o)  {
+    std::stringstream ss;
+                      ss.precision(s.precision());
+                      ss << o;
+    return s<<ss.str();
 }
-std::ostream& operator<<(std::ostream& s, const Array & a)
-{
-    s <<std::setprecision(EXT_PRECISION);
-    writeValue(s,0,"",a,SkipTag::YES);
-    return s;
+std::ostream& operator<<(std::ostream& s, const Array& a)   {
+    std::stringstream ss;
+                      ss.precision(s.precision());
+                      ss << a;
+    return s<<ss.str();
 }
-std::ostream& operator<<(std::ostream& s, const Record& r)
-{
-    s <<std::setprecision(EXT_PRECISION);
-    writeValue(s,0,r.first,r.second,SkipTag::NO);
-    return s;
+std::ostream& operator<<(std::ostream& s, const Record& r)  {
+    std::stringstream ss;
+                      ss.precision(s.precision());
+                      ss  << r;
+    return s<<ss.str();
 }
-// + еще один в пространстве std
+std::stringstream& operator<<(std::stringstream& ss, const Object& o)
+{
+    ss << std::boolalpha;
+    writeValue(ss,0,"",o,SkipTag::YES);
+    return ss;
+}
+std::stringstream& operator<<(std::stringstream& ss, const Array & a)
+{
+    ss << std::boolalpha;
+    writeValue(ss,0,"",a,SkipTag::YES);
+    return ss;
+}
+std::stringstream& operator<<(std::stringstream& ss, const Record& r)
+{
+    ss << std::boolalpha;
+    writeValue(ss,0,r.first,r.second,SkipTag::NO);
+    return ss;
+}
 //...........................................
 //-------------------------------------------
 
@@ -195,8 +219,10 @@ std::ostream& operator<<(std::ostream& s, const Record& r)
  */
 std::string to_string(const Record &r)
 {
+    static const int EXT_PRECISION = 12;    //увеличим точность вывода double до EXT_PRECISION знаков. Установите другое значение по необходимости.
     std::stringstream ss;
     ss<<std::setprecision(EXT_PRECISION);
+    ss<<std::boolalpha;
     writeValue(ss,0,r.first,r.second,SkipTag::NO);
     return ss.str();
 }

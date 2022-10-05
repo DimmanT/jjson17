@@ -6,6 +6,7 @@
 #include <vector>
 #include <variant>
 #include <string>
+#include <sstream>
 
 namespace jjson17
 {
@@ -39,6 +40,11 @@ namespace jjson17
     std::ostream& operator<<(std::ostream& s, const Object& o);
     std::ostream& operator<<(std::ostream& s, const Array & a);
     std::ostream& operator<<(std::ostream& s, const Record& r);
+
+    //... спец. функции для записи в строковый поток ...
+    std::stringstream& operator<<(std::stringstream& ss, const Object& o);
+    std::stringstream& operator<<(std::stringstream& ss, const Array & a);
+    std::stringstream& operator<<(std::stringstream& ss, const Record& r);
     // ------------------------------
 
     std::string to_string(const Record& r); ///< \brief формирует строку вида ""tag" : value". Строка в кодировке UTF-8.

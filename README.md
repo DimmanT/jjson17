@@ -1,7 +1,6 @@
 # jjson17
 
-See [russian version](./readme_rus.md) of readme.md.
-
+See [russian version](README_rus.md) of readme.md.
 
 ## Purpose 
 Simple json serialization. Parsing is not available yet.

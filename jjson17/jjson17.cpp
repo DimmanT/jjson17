@@ -3,6 +3,11 @@
 #include <sstream>
 #include <iomanip>
 
+#ifdef JJSON17_PARSE
+#include <array>
+#include <algorithm>
+#endif
+
 namespace jjson17 {
 
 
@@ -226,6 +231,132 @@ std::string to_string(const Record &r)
     writeValue(ss,0,r.first,r.second,SkipTag::NO);
     return ss.str();
 }
+
+#ifdef JJSON17_PARSE
+static void skip(std::istream &s,char terminator) { s.ignore(std::numeric_limits<std::streamsize>::max(),terminator); }
+template<typename FwdIterator>
+static auto skip(std::istream &s,FwdIterator termsBegin,FwdIterator termsEnd)
+{
+    return std::find_if(std::istream_iterator<char>(s),std::istream_iterator<char>(),
+                     [termsBegin,termsEnd] (char c)
+                        { return std::find(termsBegin,termsEnd,c)!=termsEnd;} );
+};
+// exclude terminators
+static std::string readline(std::istream &s,char terminator1,char terminator2)
+{
+    std::string res;
+    char c{'\0'};    // clang попросил тут иницализировать тк почему то считает что если ниже s>>c не получится, то сравнение будет с мусором, но s>>c должен получится, ведь я сначала проверил s
+    while(s>>c && c!=terminator1 && c!=terminator2)
+        res.push_back(c);
+    s.unget();
+    return res;
+}
+static std::string readline_escaped(std::istream &s,char terminator)
+{
+    std::string res;
+    char c;
+    while(s >> c) {
+        if(c == terminator && (res.empty() || res.back() != '\\'))
+            break;
+        res.push_back(c);
+    }
+    return res;
+}
+static Value parseNumber (std::istream& s);
+static Array parseArray  (std::istream& s);
+static Value parseLiteral(std::string&& str);
+static Object parseObject(std::istream& s)
+{
+    using namespace std;
+    static const array<char,2> START{'}','"'};
+    auto last = skip(s,START.begin(),START.end());
+    if(!s) throw runtime_error("invalid json syntax");
+    if(*last == '}') return {};
+
+    auto pObj = make_unique<Object>();
+    char c;
+    Value v;
+    do {
+        auto tag = readline_escaped(s,'"');
+        skip(s,':');
+        c = *find_if_not(istream_iterator<char>(s),istream_iterator<char>(),isspace);
+        if(c=='-'||isdigit(c))
+             v = parseNumber(s);
+        else if(c=='"')
+             v = readline_escaped(s,'"');
+        else if(c=='{')
+             v = parseObject(s);
+        else if(c=='[')
+             v = parseArray(s);
+        else v = parseLiteral(readline(s,',','}'));
+        pObj->insert({tag,v});
+        c = *skip(s,START.begin(),START.end());
+    } while(s && c!='}');
+
+    return std::move(*pObj);
+}
+
+static Array parseArray  (std::istream& s)
+{
+    using namespace std;
+    auto pArr = make_unique<Array>();
+    char c;
+    Value v;
+    do {
+        c = *find_if_not(istream_iterator<char>(s),istream_iterator<char>(),isspace);
+        if(c==']')
+            break;
+        if(c=='-'||isdigit(c))
+             v = parseNumber(s);
+        else if(c=='"')
+             v = readline_escaped(s,'"');
+        else if(c=='{')
+             v = parseObject(s);
+        else if(c=='[')
+             v = parseArray(s);
+        else v = parseLiteral(readline(s,',',']'));
+        pArr->push_back(v);
+        s>>c;
+    } while(s && c!=']');
+
+    return std::move(*pArr);
+}
+
+static Value parseNumber (std::istream& s)
+{
+    s.unget();
+    double n;
+    s >> n;
+    if(std::floor(n) < n)
+         return n ;
+    else return static_cast<int64_t>(n);
+}
+static Value parseLiteral(std::string &&str)
+{
+    if(str.size() > 2)
+    {
+        if(str[0]=='u'&&str[1]=='l'&&str[2]=='l')
+            return nullptr;
+        if(str[0]=='r'&&str[1]=='u'&&str[2]=='e')
+            return true;
+        if(str.size() > 3 && str[0]=='a'&&str[1]=='l'&&str[2]=='s'&&str[3]=='e')
+            return false;
+    }
+    throw std::runtime_error("invalid json syntax");
+}
+
+Value parse(std::istream& s)
+{
+    char c;
+    s>>c;
+    switch (c) {
+        case '{': return parseObject(s); // |>  in RVO we trust
+        case '[': return parseArray (s); // |
+        default: throw std::runtime_error("invalid json syntax");
+    }
+}
+
+#endif
 
 } // end of ns jjson17
 

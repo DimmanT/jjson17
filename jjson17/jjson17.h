@@ -8,6 +8,8 @@
 #include <string>
 #include <sstream>
 
+#define JJSON17_PARSE
+
 namespace jjson17
 {
     enum class Type : unsigned char {NUL,STRING,INTEGER,REAL,BOOL,ARRAY,OBJECT};    ///< перечисление возможных типов хранимых в объекте \ref Value
@@ -46,6 +48,10 @@ namespace jjson17
     std::stringstream& operator<<(std::stringstream& ss, const Array & a);
     std::stringstream& operator<<(std::stringstream& ss, const Record& r);
     // ------------------------------
+
+    #ifdef JJSON17_PARSE
+    Value parse(std::istream& s);   ///< \brief парсит поток формируя дерево JSON и возвращает его. \return Может быть либо объектом \ref jjson17::Object либо массивом \ref jjson17::Array
+    #endif
 
     std::string to_string(const Record& r); ///< \brief формирует строку вида ""tag" : value". Строка в кодировке UTF-8.
 

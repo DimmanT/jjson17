@@ -27,15 +27,38 @@ namespace jjson17
     struct Value : public Value_t
     {
         using Value_t::Value_t;
+        Value(Value& v)                : Value_t(static_cast<const Value_t&>(v)){}  //это нужно ткк выиигрвается перегрузка именнно неконстантной ссылкки
+        Value(const Value& v)          : Value_t(static_cast<const Value_t&>(v)) {}
+        Value(Value&& v)                 = default;
+        Value& operator=(const Value& v) = default;
+        Value& operator=(Value&& v)      = default;
+
         Value() : Value_t(nullptr) {}
+        Value(double  d) : Value_t(d) {}
+        Value(float   f) : Value_t(f) {}
+        Value(int64_t v) : Value_t(v) {}
         Value(const char* cstr) : Value_t(std::string(cstr)) {}
         template<typename T,typename = std::enable_if_t<!std::is_same_v<T,bool> && std::is_integral_v<T>> >
         Value(T v) : Value_t(int64_t(v)) {}
-        Value(int64_t v) : Value_t(v) {}
 
         void push_back(Value v);    ///< \brief дописывает значение \c v в конец массива. \c *this при этом обязан быть массивом (\ref Array).
         void insert(Record r);      ///< \brief добавляет запись \c r в объект. \c *this при этом обязан быть объектом (\ref Object).
         bool isNull();              ///< \return \c true , если *this имеет тип NUL, \c false иначе
+
+        #ifdef JJSON17_PARSE
+        template<typename T,typename = std::enable_if_t<!std::is_same_v<T,bool> && std::is_integral_v<T>> >
+        operator T () const {
+            switch (static_cast<Type>(this->index())) {
+              case Type::REAL   : return std::round(std::get<double>(*this));
+              case Type::INTEGER: return std::get<int64_t>(*this);
+              default: throw std::bad_variant_access();
+        }}
+        operator double     () const;
+        operator std::string() const;
+        operator bool       () const;
+        operator Array      () const;
+        operator Object     () const;
+        #endif
     };
 
     // --- функции вывода в поток ---

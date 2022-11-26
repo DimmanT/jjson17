@@ -8,8 +8,11 @@
 #include <algorithm>
 #endif
 
-namespace jjson17 {
+#include <iostream>
 
+using namespace std;
+
+namespace jjson17 {
 
 //---------- блок Value ---------------
 static constexpr Type type_of(const Value_t& value)
@@ -18,44 +21,57 @@ static constexpr Type type_of(const Value_t& value)
 }
 
 /**
- * \details Если значение \c *this не является массивом, то будет выброшено исключение типа \c std::logic_error .
+ * \details Если значение \c *this не является массивом, то будет выброшено исключение типа \c logic_error .
  */
 void Value::push_back(Value v)
 {
     Type t = type_of(*this);
     if(t == Type::ARRAY)
-         std::get<Array>(*this).push_back(v);
-    else throw std::logic_error("This value IS NOT an ARRAY. Rebuilding into array is not supported yet.");
+         get<Array>(*this).push_back(v);
+    else throw logic_error("This value IS NOT an ARRAY. Rebuilding into array is not supported yet.");
 }
 
 /**
- * \details Если значение \c *this не является объектом, то будет выброшено исключение типа \c std::logic_error .
+ * \details Если значение \c *this не является объектом, то будет выброшено исключение типа \c logic_error .
  */
 void Value::insert(Record r)
 {
     Type t = type_of(*this);
     if(t == Type::OBJECT)
-         std::get<Object>(*this).insert(r);
-    else throw std::logic_error("This value IS NOT an OBJECT. Rebuilding into object is not supported yet.");
+         get<Object>(*this).insert(r);
+    else throw logic_error("This value IS NOT an OBJECT. Rebuilding into object is not supported yet.");
 }
 
 bool Value::isNull()
 {
     return type_of(*this) == Type::NUL;
 }
+
+Value::operator double() const
+{
+    switch (type_of(*this)) {
+        case Type::REAL   : return get<double> (*this);
+        case Type::INTEGER: return static_cast<double>(get<int64_t>(*this));
+        default: throw bad_variant_access();
+    }
+}
+Value::operator string() const  { return get<string>(*this);}
+Value::operator bool()   const  { return get<bool  >(*this);}
+Value::operator Array()  const  { return get<Array >(*this);}
+Value::operator Object() const  { return get<Object>(*this);}
 //--------------------------------------
 
 //----------- блок Вывода --------------
 enum class SkipTag : bool {NO,YES};
 
-static void writeValue(std::ostream& s,uint16_t depth, const std::string& tag,const Value_t& val, SkipTag skipTag);
+static void writeValue(ostream& s,uint16_t depth, const string& tag,const Value_t& val, SkipTag skipTag);
 
 /**
  * @brief escape
  * @param str
  * @return строку в UTF-8 с экранированными символами согласно рекомендации \link json.org
  */
-static std::string escape(std::string&& str)
+static string escape(string&& str)
 {
     //предполагается, что строка utf8
     //таблица размера символа utf8 в байтах по префиксу первого байта
@@ -87,25 +103,24 @@ static std::string escape(std::string&& str)
         i+=mv;  // сдвигаемся на количество байт соотв. размеру UTF-8 символа
     }
 
-    return std::move(str);
+    return move(str);
 }
-static auto prepareStr(std::string str)
+static auto prepareStr(string str)
 {
-    return '"'+escape(std::move(str))+'"';
+    return '"'+escape(move(str))+'"';
 }
 
 struct Visitor {
-    Visitor(std::ostream& stream, uint16_t depth, bool skipTag) : s(stream),depth(depth),skipTag(skipTag) {}
+    Visitor(ostream& stream, uint16_t depth, bool skipTag) : s(stream),depth(depth),skipTag(skipTag) {}
     void operator()(nullptr_t             ) {s << "null";}
     void operator()(bool               val) {s << val;}
-    void operator()(const std::string& str) {s << prepareStr(str);}
+    void operator()(const string& str) {s << prepareStr(str);}
     void operator()(int64_t            num) {s << num;}
     void operator()(double             num) {s << num;}
     void operator()(const Array&       arr)
     {
-        using namespace std;
         if(!skipTag) {
-            s << std::endl;
+            s << endl;
             insertTabs();
         }
         s << '[' ;
@@ -129,9 +144,8 @@ struct Visitor {
     }
     void operator()(const Object&      obj)
     {
-        using namespace std;
         if(!skipTag)  {
-            s << std::endl;
+            s << endl;
             insertTabs();
         }
         s<<'{';
@@ -153,7 +167,7 @@ struct Visitor {
         s<<'}';
     }
 private:
-    std::ostream& s;
+    ostream& s;
     uint16_t      depth;
     bool          skipTag;
 
@@ -170,49 +184,49 @@ private:
  * @param v         само значение
  * @param skipTag   если выставлен в \c SkipTag::YES , то в поток будет записано только значение без, наименования и символа ':'
  */
-static void writeValue(std::ostream& s,uint16_t depth, const std::string& tag,const Value_t& val, SkipTag skipTag)
+static void writeValue(ostream& s,uint16_t depth, const string& tag,const Value_t& val, SkipTag skipTag)
 {
     if(skipTag == SkipTag::NO)
         s << prepareStr(tag)<<':'<<'\t';
-    std::visit(Visitor{s, depth, skipTag==SkipTag::YES},val);
+    visit(Visitor{s, depth, skipTag==SkipTag::YES},val);
 }
 
 //...... блок операторов вывода ..............
 /// \todo передать обязанность выставления точности на пользователя (!)
 
-std::ostream& operator<<(std::ostream& s, const Object& o)  {
-    std::stringstream ss;
+ostream& operator<<(ostream& s, const Object& o)  {
+    stringstream ss;
                       ss.precision(s.precision());
                       ss << o;
     return s<<ss.str();
 }
-std::ostream& operator<<(std::ostream& s, const Array& a)   {
-    std::stringstream ss;
+ostream& operator<<(ostream& s, const Array& a)   {
+    stringstream ss;
                       ss.precision(s.precision());
                       ss << a;
     return s<<ss.str();
 }
-std::ostream& operator<<(std::ostream& s, const Record& r)  {
-    std::stringstream ss;
+ostream& operator<<(ostream& s, const Record& r)  {
+    stringstream ss;
                       ss.precision(s.precision());
                       ss  << r;
     return s<<ss.str();
 }
-std::stringstream& operator<<(std::stringstream& ss, const Object& o)
+stringstream& operator<<(stringstream& ss, const Object& o)
 {
-    ss << std::boolalpha;
+    ss << boolalpha;
     writeValue(ss,0,"",o,SkipTag::YES);
     return ss;
 }
-std::stringstream& operator<<(std::stringstream& ss, const Array & a)
+stringstream& operator<<(stringstream& ss, const Array & a)
 {
-    ss << std::boolalpha;
+    ss << boolalpha;
     writeValue(ss,0,"",a,SkipTag::YES);
     return ss;
 }
-std::stringstream& operator<<(std::stringstream& ss, const Record& r)
+stringstream& operator<<(stringstream& ss, const Record& r)
 {
-    ss << std::boolalpha;
+    ss << boolalpha;
     writeValue(ss,0,r.first,r.second,SkipTag::NO);
     return ss;
 }
@@ -222,116 +236,124 @@ std::stringstream& operator<<(std::stringstream& ss, const Record& r)
 /**
  * \return строку вида "tag : value"
  */
-std::string to_string(const Record &r)
+string to_string(const Record &r)
 {
     static const int EXT_PRECISION = 12;    //увеличим точность вывода double до EXT_PRECISION знаков. Установите другое значение по необходимости.
-    std::stringstream ss;
-    ss<<std::setprecision(EXT_PRECISION);
-    ss<<std::boolalpha;
+    stringstream ss;
+    ss<<setprecision(EXT_PRECISION);
+    ss<<boolalpha;
     writeValue(ss,0,r.first,r.second,SkipTag::NO);
     return ss.str();
 }
 
 #ifdef JJSON17_PARSE
-static void skip(std::istream &s,char terminator) { s.ignore(std::numeric_limits<std::streamsize>::max(),terminator); }
+//=======================================================================================================
+//static void skip(istream &s,char terminator) { s.ignore(numeric_limits<streamsize>::max(),terminator); }
 template<typename FwdIterator>
-static auto skip(std::istream &s,FwdIterator termsBegin,FwdIterator termsEnd)
+static auto skip(istream &s,FwdIterator termsBegin,FwdIterator termsEnd)
 {
-    return std::find_if(std::istream_iterator<char>(s),std::istream_iterator<char>(),
+    return find_if(istream_iterator<char>(s),istream_iterator<char>(),
                      [termsBegin,termsEnd] (char c)
-                        { return std::find(termsBegin,termsEnd,c)!=termsEnd;} );
+                        { return find(termsBegin,termsEnd,c)!=termsEnd;} );
 };
 // exclude terminators
-static std::string readline(std::istream &s,char terminator1,char terminator2)
+static string readline(istream &s,char terminator1,char terminator2)
 {
-    std::string res;
+    string res;
     char c{'\0'};    // clang попросил тут иницализировать тк почему то считает что если ниже s>>c не получится, то сравнение будет с мусором, но s>>c должен получится, ведь я сначала проверил s
     while(s>>c && c!=terminator1 && c!=terminator2)
         res.push_back(c);
     s.unget();
-    return res;
+    return res; //NRVO
 }
-static std::string readline_escaped(std::istream &s,char terminator)
+static string readline_escaped(istream &s,char terminator)
 {
-    std::string res;
+    string res;
     char c;
-    while(s >> c) {
-        if(c == terminator && (res.empty() || res.back() != '\\'))
-            break;
-        res.push_back(c);
+    while(s) {
+        c = s.get();
+        if(c == terminator) break;
+        if(c=='\\')  {
+            c = s.get();
+            switch (c) {    //здесь можно соптимизировать по таблице
+                case 'b'  : res.push_back('\b');break;
+                case 'f'  : res.push_back('\f');break;
+                case 'n'  : res.push_back('\n');break;
+                case 'r'  : res.push_back('\r');break;
+                case 't'  : res.push_back('\t');break;
+                default   : res.push_back(c); break;
+            }
+        }
+        else res.push_back(c);
     }
-    return res;
+    return res; //NRVO
 }
-static Value parseNumber (std::istream& s);
-static Array parseArray  (std::istream& s);
-static Value parseLiteral(std::string&& str);
-static Object parseObject(std::istream& s)
+
+static Value  parseNumber (istream& s);
+static Array  parseArray  (istream& s);
+static Object parseObject(istream& s);
+static Value  parseLiteral(string&& str);
+static Value  parseValue(char c, istream& s)
+{
+    if(c=='-'||isdigit(c))  return parseNumber(s);
+    else if(c=='"')         return readline_escaped(s,'"');
+    else if(c=='{')         return parseObject(s);
+    else if(c=='[')         return parseArray(s);
+    else                    return parseLiteral(readline(s,',','}'));
+}
+static Object parseObject(istream& s)
 {
     using namespace std;
     static const array<char,2> START{'}','"'};
+
     auto last = skip(s,START.begin(),START.end());
-    if(!s) throw runtime_error("invalid json syntax");
+    if(!s) throw runtime_error(string("invalid json syntax ")+__FUNCTION__+" L"+std::to_string(__LINE__));
     if(*last == '}') return {};
 
     auto pObj = make_unique<Object>();
     char c;
     Value v;
     do {
+        s >> skipws;
         auto tag = readline_escaped(s,'"');
-        skip(s,':');
-        c = *find_if_not(istream_iterator<char>(s),istream_iterator<char>(),isspace);
-        if(c=='-'||isdigit(c))
-             v = parseNumber(s);
-        else if(c=='"')
-             v = readline_escaped(s,'"');
-        else if(c=='{')
-             v = parseObject(s);
-        else if(c=='[')
-             v = parseArray(s);
-        else v = parseLiteral(readline(s,',','}'));
+        s>>c;// считаем ':' //if(c!=':') throw runtime_error("invalid json syntax");
+        s>>c;
+        v = parseValue(c,s);//тут какая то ошибка !!!!!!!
         pObj->insert({tag,v});
         c = *skip(s,START.begin(),START.end());
     } while(s && c!='}');
 
-    return std::move(*pObj);
+    return move(*pObj);
 }
 
-static Array parseArray  (std::istream& s)
+static Array parseArray  (istream& s)
 {
     using namespace std;
     auto pArr = make_unique<Array>();
     char c;
     Value v;
+    s>>skipws;
     do {
-        c = *find_if_not(istream_iterator<char>(s),istream_iterator<char>(),isspace);
-        if(c==']')
-            break;
-        if(c=='-'||isdigit(c))
-             v = parseNumber(s);
-        else if(c=='"')
-             v = readline_escaped(s,'"');
-        else if(c=='{')
-             v = parseObject(s);
-        else if(c=='[')
-             v = parseArray(s);
-        else v = parseLiteral(readline(s,',',']'));
-        pArr->push_back(v);
         s>>c;
+        if(c==']') break;
+        v= parseValue(c,s);
+        pArr->push_back(v);
+        s>>c;   // считаем ','
     } while(s && c!=']');
 
-    return std::move(*pArr);
+    return move(*pArr);
 }
 
-static Value parseNumber (std::istream& s)
+static Value parseNumber (istream& s)
 {
     s.unget();
     double n;
     s >> n;
-    if(std::floor(n) < n)
+    if(floor(n) < n)
          return n ;
     else return static_cast<int64_t>(n);
 }
-static Value parseLiteral(std::string &&str)
+static Value parseLiteral(string &&str)
 {
     if(str.size() > 2)
     {
@@ -342,20 +364,20 @@ static Value parseLiteral(std::string &&str)
         if(str.size() > 3 && str[0]=='a'&&str[1]=='l'&&str[2]=='s'&&str[3]=='e')
             return false;
     }
-    throw std::runtime_error("invalid json syntax");
+    throw runtime_error(string("invalid json syntax ")+__FUNCTION__+" L"+std::to_string(__LINE__));
 }
 
-Value parse(std::istream& s)
+Value parse(istream& s)
 {
     char c;
     s>>c;
     switch (c) {
         case '{': return parseObject(s); // |>  in RVO we trust
         case '[': return parseArray (s); // |
-        default: throw std::runtime_error("invalid json syntax");
+        default : throw runtime_error(string("invalid json syntax ")+__FUNCTION__+" L"+std::to_string(__LINE__));
     }
 }
-
+//=================================================================================
 #endif
 
 } // end of ns jjson17

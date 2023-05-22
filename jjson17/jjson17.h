@@ -8,11 +8,13 @@
 #include <string>
 #include <sstream>
 
-#define JJSON17_PARSE
+#ifdef JJSON17_PARSE
+#include <cmath>    //для округления в operator T ()
+#endif
 
 namespace jjson17
 {
-    enum class Type : unsigned char {NUL,STRING,INTEGER,REAL,BOOL,ARRAY,OBJECT};    ///< перечисление возможных типов хранимых в объекте \ref Value
+    enum class Type : unsigned char {NUL,STRING,INTEGER,REAL,BOOL,ARRAY,OBJECT};    ///< перечисление возможных типов хранимых в объекте \ref Value . Можно получить методом std::variant::index()
     struct Value;
     using  Record = std::pair<std::string,Value>;       ///< псевдоним для записи в объектах
 
@@ -27,25 +29,22 @@ namespace jjson17
     struct Value : public Value_t
     {
         using Value_t::Value_t;
-        Value(Value& v)                : Value_t(static_cast<const Value_t&>(v)){}  //это нужно ткк выиигрвается перегрузка именнно неконстантной ссылкки
+        Value(Value& v)                : Value_t(static_cast<const Value_t&>(v)){}  //это нужно тк выигрывается перегрузка именнно неконстантной ссылки
         Value(const Value& v)          : Value_t(static_cast<const Value_t&>(v)) {}
         Value(Value&& v)                 = default;
         Value& operator=(const Value& v) = default;
         Value& operator=(Value&& v)      = default;
 
         Value() : Value_t(nullptr) {}
-        Value(double  d) : Value_t(d) {}
-        Value(float   f) : Value_t(f) {}
-        Value(int64_t v) : Value_t(v) {}
-        Value(const char* cstr) : Value_t(std::string(cstr)) {}
-        template<typename T,typename = std::enable_if_t<!std::is_same_v<T,bool> && std::is_integral_v<T>> >
-        Value(T v) : Value_t(int64_t(v)) {}
+        Value(unsigned long long v) : Value_t(static_cast<int64_t>(v)) {}
 
         void push_back(Value v);    ///< \brief дописывает значение \c v в конец массива. \c *this при этом обязан быть массивом (\ref Array).
         void insert(Record r);      ///< \brief добавляет запись \c r в объект. \c *this при этом обязан быть объектом (\ref Object).
         bool isNull();              ///< \return \c true , если *this имеет тип NUL, \c false иначе
 
         #ifdef JJSON17_PARSE
+        /// \brief Обеспечивает неявное преобразование к целому числу (знак. и беззнак.). Если не хранит число, то бросает \c std::bad_variant_access .
+        /// \return число хранимое в структуре. Вещественные числа матем-ки округляются.
         template<typename T,typename = std::enable_if_t<!std::is_same_v<T,bool> && std::is_integral_v<T>> >
         operator T () const {
             switch (static_cast<Type>(this->index())) {

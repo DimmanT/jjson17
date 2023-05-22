@@ -6,6 +6,7 @@
 #ifdef JJSON17_PARSE
 #include <array>
 #include <algorithm>
+#include <iterator>
 #endif
 
 #include <iostream>
@@ -42,6 +43,7 @@ void Value::insert(Record r)
     else throw logic_error("This value IS NOT an OBJECT. Rebuilding into object is not supported yet.");
 }
 
+#ifdef JJSON17_PARSE
 bool Value::isNull()
 {
     return type_of(*this) == Type::NUL;
@@ -59,6 +61,7 @@ Value::operator string() const  { return get<string>(*this);}
 Value::operator bool()   const  { return get<bool  >(*this);}
 Value::operator Array()  const  { return get<Array >(*this);}
 Value::operator Object() const  { return get<Object>(*this);}
+#endif
 //--------------------------------------
 
 //----------- блок Вывода --------------
@@ -291,7 +294,7 @@ static string readline_escaped(istream &s,char terminator)
 
 static Value  parseNumber (istream& s);
 static Array  parseArray  (istream& s);
-static Object parseObject(istream& s);
+static Object parseObject (istream& s);
 static Value  parseLiteral(string&& str);
 static Value  parseValue(char c, istream& s)
 {
